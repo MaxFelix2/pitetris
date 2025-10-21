@@ -221,14 +221,17 @@ enum {
     JS_ENTER,
     JS_COUNT
 };
+
+int js_state[JS_COUNT] = {0};
+unsigned long last_tick[JS_COUNT] = {0};
+
+// cooldowns per direction (in ticks)
 #define COOLDOWN_UP     0
-#define COOLDOWN_DOWN   50   // slower repeat for down
+#define COOLDOWN_DOWN   49
 #define COOLDOWN_LEFT   25
 #define COOLDOWN_RIGHT  25
 #define COOLDOWN_ENTER  0
 
-int js_state[JS_COUNT] = {0};
-unsigned long last_tick[JS_COUNT] = {0};
 static const int cooldown_ticks[JS_COUNT] = {
     COOLDOWN_UP,
     COOLDOWN_DOWN,
@@ -256,6 +259,18 @@ int readSenseHatJoystick()
                         case KEY_ENTER: js_state[JS_ENTER] = event.value; break;
                         default: break;
                     }
+
+                    // Reset cooldown when released
+                    if (event.value == 0) {
+                        switch (event.code) {
+                            case KEY_UP:    last_tick[JS_UP]    = 0; break;
+                            case KEY_DOWN:  last_tick[JS_DOWN]  = 0; break;
+                            case KEY_LEFT:  last_tick[JS_LEFT]  = 0; break;
+                            case KEY_RIGHT: last_tick[JS_RIGHT] = 0; break;
+                            case KEY_ENTER: last_tick[JS_ENTER] = 0; break;
+                            default: break;
+                        }
+                    }
                 }
             } else {
                 if (n < 0 && errno == EAGAIN)
@@ -272,7 +287,7 @@ int readSenseHatJoystick()
                 ? (game.tick - last_tick[i])
                 : (game.nextGameTick + game.tick - last_tick[i]); // handle wrap-around
 
-            if (dt >= cooldown_ticks[i]) {
+            if (last_tick[i] == 0 || dt >= cooldown_ticks[i]) {
                 last_tick[i] = game.tick;
                 switch (i) {
                     case JS_UP:    return KEY_UP;
