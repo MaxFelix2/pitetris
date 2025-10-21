@@ -219,16 +219,29 @@ int readSenseHatJoystick()
     struct pollfd pfd;
     pfd.fd = js_fd;
     pfd.events = POLLIN;
-    int ret = poll(&pfd,1, 10);
-    if(ret > 0) { //something happened, value ready
-       if (pfd.revents & POLLIN) {
-          // Data ready to read — safe to call read()
-          read(pfd.fd, &event, sizeof(event));
-          return event.type;
-      }
-    }
 
-    
+    int ret = poll(&pfd, 1, 10);
+    if (ret > 0) {
+        if (pfd.revents & POLLIN) {
+            int last_type = 0;
+            while (1) {
+                ssize_t n = read(pfd.fd, &event, sizeof(event));
+                if (n == sizeof(event)) {
+                    last_type = event.type;
+                    if (event.type == EV_KEY && (event.value == 1 || event.value == 0)) {
+                    }
+                } else {
+                    if (n < 0 && errno == EAGAIN)
+                        break;
+                    else
+                        perror("read");
+                }
+            }
+            return last_type;
+        }
+    } else if (ret < 0) {
+        perror("poll");
+    }
     return 0;
 }
 
