@@ -213,6 +213,17 @@ void freeSenseHat()
 // KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, with the respective direction
 // and KEY_ENTER, when the the joystick is pressed
 // !!! when nothing was pressed you MUST return 0 !!!
+enum {
+    JS_UP = 0,
+    JS_DOWN,
+    JS_LEFT,
+    JS_RIGHT,
+    JS_ENTER,
+    JS_COUNT
+};
+
+int js_state[JS_COUNT] = {0};
+
 int readSenseHatJoystick()
 {
     struct input_event event;
@@ -220,14 +231,32 @@ int readSenseHatJoystick()
     pfd.fd = js_fd;
     pfd.events = POLLIN;
 
-    int ret = poll(&pfd, 1, 0);  // 0 ms timeout = non-blocking
-
+    int ret = poll(&pfd, 1, 0);
     if (ret > 0 && (pfd.revents & POLLIN)) {
         while (1) {
             ssize_t n = read(pfd.fd, &event, sizeof(event));
             if (n == sizeof(event)) {
-                if (event.type == EV_KEY && (event.value == 1 || event.value == 0))
-                    return event.code;  // return actual joystick button
+                if (event.type == EV_KEY) {
+                    switch (event.code) {
+                        case KEY_UP:
+                            js_state[JS_UP] = event.value;
+                            break;
+                        case KEY_DOWN:
+                            js_state[JS_DOWN] = event.value;
+                            break;
+                        case KEY_LEFT:
+                            js_state[JS_LEFT] = event.value;
+                            break;
+                        case KEY_RIGHT:
+                            js_state[JS_RIGHT] = event.value;
+                            break;
+                        case KEY_ENTER:
+                            js_state[JS_ENTER] = event.value;
+                            break;
+                        default:
+                            break;
+                    }
+                }
             } else {
                 if (n < 0 && errno == EAGAIN)
                     break;
@@ -235,9 +264,13 @@ int readSenseHatJoystick()
                     perror("read");
             }
         }
-    } else if (ret < 0) {
-        perror("poll");
     }
+
+    if (js_state[JS_UP])    return KEY_UP;
+    if (js_state[JS_DOWN])  return KEY_DOWN;
+    if (js_state[JS_LEFT])  return KEY_LEFT;
+    if (js_state[JS_RIGHT]) return KEY_RIGHT;
+    if (js_state[JS_ENTER]) return KEY_ENTER;
 
     return 0;
 }
