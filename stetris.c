@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/poll.h>
 #include <sys/types.h>
 #include <termios.h>
 #include <sys/select.h>
@@ -17,6 +18,7 @@
 #include <sys/ioctl.h>
 #include <linux/fb.h>
 #include <sys/mman.h>
+#include <errno.h>
 // The game state can be used to detect what happens on the playfield
 #define GAMEOVER 0
 #define ACTIVE (1 << 0)
@@ -24,6 +26,7 @@
 #define TILE_ADDED (1 << 2)
 
 int fb_fd;
+int js_fd;
 u_int16_t *fbmem;
 struct fb_fix_screeninfo fix;
 struct fb_var_screeninfo var;
@@ -129,26 +132,77 @@ int open_framebuffer_by_name(const char *target_name) {
     return -1;
 }
 
+#define JOYSTICK "Raspberry Pi Sense HAT Joystick"
+
+int get_joystick_fd(const char *target_name) {
+    char filename[64];
+    char name[256];
+    int fd = -1;
+    int i = 0;
+
+    while (1) {
+        snprintf(filename, sizeof(filename), "/dev/input/event%d", i);
+        fd = open(filename, O_RDONLY);
+        if (fd < 0) {
+            if (errno == ENOENT)
+                break;  // no more devices
+            else {
+                i++;
+                continue;  // skip inaccessible device (permission error, etc.)
+            }
+        }
+
+        if (ioctl(fd, EVIOCGNAME(sizeof(name)), name) < 0) {
+            close(fd);
+            i++;
+            continue;
+        }
+
+        if (strcmp(name, target_name) == 0) {
+            // Found it — set non-blocking mode
+            int flags = fcntl(fd, F_GETFL, 0);
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+            return fd;
+        }
+
+        close(fd);
+        i++;
+    }
+
+    return -1;
+}
 
 // This function is called on the start of your application
 // Here you can initialize what ever you need for your task
 // return false if something fails, else true
 bool initializeSenseHat()
 {    
-    //get file descriptor
+    // --- setup of screen ---
+    //get file descriptor of framebuffer
     fb_fd = open_framebuffer_by_name(TARGET_FB_NAME);
     if (fb_fd == -1) return false;
     ioctl(fb_fd, FBIOGET_FSCREENINFO, &fix);
     ioctl(fb_fd, FBIOGET_VSCREENINFO, &var);
     fbmem = (u_int16_t *)mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
         if (fbmem == MAP_FAILED) return false;
+    // --- joystick setup ---
+    js_fd = get_joystick_fd(JOYSTICK);
+    if(!js_fd) {
+    return false;
+  }
     return true;
 }
-
+void renderSenseHatMatrix(bool const playfieldChanged);
+static inline void resetPlayfield();
 // This function is called when the application exits
 // Here you can free up everything that you might have opened/allocated
 void freeSenseHat()
 {
+  //black out field before quitting
+  resetPlayfield();
+  renderSenseHatMatrix(true);
+  //close file descriptor and unmap memory
   if (close(fb_fd) == -1) {
   perror("close");
   }
@@ -161,6 +215,19 @@ void freeSenseHat()
 // !!! when nothing was pressed you MUST return 0 !!!
 int readSenseHatJoystick()
 {
+    struct input_event event;
+    struct pollfd pfd;
+    pfd.fd = js_fd;
+    pfd.events = POLLIN;
+    int ret = poll(&pfd,1, 10);
+    if(ret > 0) { //something happened, value ready
+       if (pfd.revents & POLLIN) {
+          // Data ready to read — safe to call read()
+          read(pfd.fd, &event, sizeof(event));
+      }
+    }
+
+    
     return 0;
 }
 
@@ -571,7 +638,7 @@ int main(int argc, char **argv)
             // reading the inputs from stdin. However, we expect you to read the inputs directly
             // from the input device and not from stdin (you should implement the readSenseHatJoystick
             // method).
-            key = readKeyboard();
+            //key = readKeyboard();
         }
         if (key == KEY_ENTER)
             break;
