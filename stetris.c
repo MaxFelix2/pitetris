@@ -223,13 +223,13 @@ enum {
 };
 
 int js_state[JS_COUNT] = {0};
+unsigned long last_tick[JS_COUNT] = {0};
+#define INPUT_COOLDOWN_TICKS 5  // how many game ticks must pass before repeating input
 
 int readSenseHatJoystick()
 {
     struct input_event event;
-    struct pollfd pfd;
-    pfd.fd = js_fd;
-    pfd.events = POLLIN;
+    struct pollfd pfd = { .fd = js_fd, .events = POLLIN };
 
     int ret = poll(&pfd, 1, 0);
     if (ret > 0 && (pfd.revents & POLLIN)) {
@@ -238,23 +238,12 @@ int readSenseHatJoystick()
             if (n == sizeof(event)) {
                 if (event.type == EV_KEY) {
                     switch (event.code) {
-                        case KEY_UP:
-                            js_state[JS_UP] = event.value;
-                            break;
-                        case KEY_DOWN:
-                            js_state[JS_DOWN] = event.value;
-                            break;
-                        case KEY_LEFT:
-                            js_state[JS_LEFT] = event.value;
-                            break;
-                        case KEY_RIGHT:
-                            js_state[JS_RIGHT] = event.value;
-                            break;
-                        case KEY_ENTER:
-                            js_state[JS_ENTER] = event.value;
-                            break;
-                        default:
-                            break;
+                        case KEY_UP:    js_state[JS_UP]    = event.value; break;
+                        case KEY_DOWN:  js_state[JS_DOWN]  = event.value; break;
+                        case KEY_LEFT:  js_state[JS_LEFT]  = event.value; break;
+                        case KEY_RIGHT: js_state[JS_RIGHT] = event.value; break;
+                        case KEY_ENTER: js_state[JS_ENTER] = event.value; break;
+                        default: break;
                     }
                 }
             } else {
@@ -266,11 +255,21 @@ int readSenseHatJoystick()
         }
     }
 
-    if (js_state[JS_UP])    return KEY_UP;
-    if (js_state[JS_DOWN])  return KEY_DOWN;
-    if (js_state[JS_LEFT])  return KEY_LEFT;
-    if (js_state[JS_RIGHT]) return KEY_RIGHT;
-    if (js_state[JS_ENTER]) return KEY_ENTER;
+    for (int i = 0; i < JS_COUNT; i++) {
+        if (js_state[i]) {
+            if ((game.tick - last_tick[i]) >= INPUT_COOLDOWN_TICKS || game.tick < last_tick[i]) {
+                last_tick[i] = game.tick;
+
+                switch (i) {
+                    case JS_UP:    return KEY_UP;
+                    case JS_DOWN:  return KEY_DOWN;
+                    case JS_LEFT:  return KEY_LEFT;
+                    case JS_RIGHT: return KEY_RIGHT;
+                    case JS_ENTER: return KEY_ENTER;
+                }
+            }
+        }
+    }
 
     return 0;
 }
