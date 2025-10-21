@@ -1,6 +1,8 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <sys/select.h>
 #include <linux/input.h>
@@ -14,6 +16,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/fb.h>
+#include <sys/mman.h>
 //to test different things
 //
  #define TARGET_FB_NAME "RPi-Sense FB" 
@@ -81,6 +84,13 @@ int main(int argc, char *argv[])
   printf("Framebuffer mem size (smem_len): %u\n", fix.smem_len);
   printf("Type: id=%d, type=%d, visual=%d\n", fix.id[0], fix.type, fix.visual);
   //Light up screen
+  size_t screen_size = fix.smem_len;
+  u_int16_t *fbmem = (u_int16_t *)mmap(NULL, screen_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (fbmem == MAP_FAILED) return EXIT_FAILURE;
+  while(true) {
+    fbmem[0] = 0xFFFF;
+  }
+
 
   close(fd);
   return EXIT_SUCCESS;
