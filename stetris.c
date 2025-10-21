@@ -175,9 +175,9 @@ void renderSenseHatMatrix(bool const playfieldChanged)
     for(int i = 0; i < game.grid.y; i++) {
       for(int j= 0; j < game.grid.x; j++) {
         if(game.playfield[i][j].occupied == true) {
-          fbmem[i*fix.line_length + j] = game.playfield[i][j].color;
+          fbmem[i*game.grid.x + j] = game.playfield[i][j].color;
         } else {
-          fbmem[i*fix.line_length + j] = 0x0000;  
+          fbmem[i*game.grid.x + j] = 0x0000;  
         }
       }
     }
