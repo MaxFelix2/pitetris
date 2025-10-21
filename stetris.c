@@ -8,6 +8,10 @@
 #include <string.h>
 #include <time.h>
 #include <poll.h>
+#include <string.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 // The game state can be used to detect what happens on the playfield
 #define GAMEOVER 0
@@ -15,6 +19,7 @@
 #define ROW_CLEAR (1 << 1)
 #define TILE_ADDED (1 << 2)
 
+int fb_fd;
 // If you extend this structure, either avoid pointers or adjust
 // the game logic allocate/deallocate and reset the memory
 typedef struct
@@ -58,11 +63,75 @@ gameConfig game = {
     .initNextGameTick = 50,
 };
 
+
+#define TARGET_FB_NAME "RPi-Sense FB" 
+
+int open_framebuffer_by_name(const char *target_name) {
+    struct dirent *entry;
+    DIR *dp = opendir("/sys/class/graphics");
+    if (!dp) {
+        perror("opendir");
+        return -1;
+    }
+
+    while ((entry = readdir(dp)) != NULL) {
+        if (strncmp(entry->d_name, "fb", 2) != 0)
+            continue; // Skip non-fb entries
+
+        // Build path to name file
+        char path[256];
+        snprintf(path, sizeof(path), "/sys/class/graphics/%s/name", entry->d_name);
+
+        FILE *f = fopen(path, "r");
+        if (!f) continue;
+
+        char fb_name[128];
+        if (fgets(fb_name, sizeof(fb_name), f)) {
+            // Remove trailing newline
+            fb_name[strcspn(fb_name, "\n")] = 0;
+
+            if (strcmp(fb_name, target_name) == 0) {
+                // Found matching framebuffer
+                fclose(f);
+                closedir(dp);
+
+                // Build /dev/fbN path
+                char devpath[128];
+                snprintf(devpath, sizeof(devpath), "/dev/%s", entry->d_name);
+                int fd = open(devpath, O_RDWR);
+                if (fd == -1) {
+                    perror("open framebuffer");
+                    return -1;
+                }
+                return fd;
+            }
+        }
+        fclose(f);
+    }
+
+    closedir(dp);
+    fprintf(stderr, "Framebuffer \"%s\" not found\n", target_name);
+    return -1;
+}
+
+int main() {
+    int fb_fd = open_framebuffer_by_name(TARGET_FB_NAME);
+    if (fb_fd == -1) return 1;
+
+    printf("Opened framebuffer successfully: fd=%d\n", fb_fd);
+
+    // Now you can mmap() or ioctl() the framebuffer
+
+    close(fb_fd);
+    return 0;
+}
 // This function is called on the start of your application
 // Here you can initialize what ever you need for your task
 // return false if something fails, else true
 bool initializeSenseHat()
-{
+{    
+    fb_fd = open_framebuffer_by_name(TARGET_FB_NAME);
+    if (fb_fd == -1) return false;
     return true;
 }
 
@@ -70,6 +139,9 @@ bool initializeSenseHat()
 // Here you can free up everything that you might have opened/allocated
 void freeSenseHat()
 {
+  if (close(fb_fd) == -1) {
+  perror("close");
+  }
 }
 
 // This function should return the key that corresponds to the joystick press
@@ -468,7 +540,7 @@ int main(int argc, char **argv)
             // reading the inputs from stdin. However, we expect you to read the inputs directly
             // from the input device and not from stdin (you should implement the readSenseHatJoystick
             // method).
-            // key = readKeyboard();
+            //key = readKeyboard();
         }
         if (key == KEY_ENTER)
             break;
