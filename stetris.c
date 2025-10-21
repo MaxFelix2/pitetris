@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -26,14 +27,12 @@ int fb_fd;
 u_int16_t *fbmem;
 struct fb_fix_screeninfo fix;
 struct fb_var_screeninfo var;
+int color = 0; //to alternate colors
 
-enum COLORS {
-   GREEN,
-   BLUE ,
-   RED  ,
-   WHITE,
-   DARK ,
-};
+#define WHITEHEX 0xFFFF
+#define BLUEHEX  0x001F
+#define GREENHEX 0x07E0
+#define REDHEX   0xF800
 
 // If you extend this structure, either avoid pointers or adjust
 // the game logic allocate/deallocate and reset the memory
@@ -191,7 +190,15 @@ void renderSenseHatMatrix(bool const playfieldChanged)
 static inline void newTile(coord const target)
 {
     game.playfield[target.y][target.x].occupied = true;
-    game.playfield[target.y][target.x].color = 0xFFFF;
+    int16_t tilecolor;
+    switch (color) {
+    case 0: tilecolor = BLUEHEX ; break;
+    case 1: tilecolor = REDHEX  ; break;
+    case 2: tilecolor = GREENHEX; break;
+    case 3: tilecolor = WHITEHEX; break;
+    }
+    game.playfield[target.y][target.x].color = tilecolor;
+    color = (color+1)%4;
 }
 
 static inline void copyTile(coord const to, coord const from)
