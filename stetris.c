@@ -221,10 +221,21 @@ enum {
     JS_ENTER,
     JS_COUNT
 };
+#define COOLDOWN_UP     0
+#define COOLDOWN_DOWN   50   // slower repeat for down
+#define COOLDOWN_LEFT   25
+#define COOLDOWN_RIGHT  25
+#define COOLDOWN_ENTER  0
 
 int js_state[JS_COUNT] = {0};
 unsigned long last_tick[JS_COUNT] = {0};
-#define INPUT_COOLDOWN_TICKS 5  // how many game ticks must pass before repeating input
+static const int cooldown_ticks[JS_COUNT] = {
+    COOLDOWN_UP,
+    COOLDOWN_DOWN,
+    COOLDOWN_LEFT,
+    COOLDOWN_RIGHT,
+    COOLDOWN_ENTER
+};
 
 int readSenseHatJoystick()
 {
@@ -257,9 +268,12 @@ int readSenseHatJoystick()
 
     for (int i = 0; i < JS_COUNT; i++) {
         if (js_state[i]) {
-            if ((game.tick - last_tick[i]) >= INPUT_COOLDOWN_TICKS || game.tick < last_tick[i]) {
-                last_tick[i] = game.tick;
+            unsigned long dt = (game.tick >= last_tick[i])
+                ? (game.tick - last_tick[i])
+                : (game.nextGameTick + game.tick - last_tick[i]); // handle wrap-around
 
+            if (dt >= cooldown_ticks[i]) {
+                last_tick[i] = game.tick;
                 switch (i) {
                     case JS_UP:    return KEY_UP;
                     case JS_DOWN:  return KEY_DOWN;
