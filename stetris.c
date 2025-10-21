@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <sys/select.h>
 #include <linux/input.h>
@@ -12,7 +13,9 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
-
+#include <sys/ioctl.h>
+#include <linux/fb.h>
+#include <sys/mman.h>
 // The game state can be used to detect what happens on the playfield
 #define GAMEOVER 0
 #define ACTIVE (1 << 0)
@@ -20,11 +23,24 @@
 #define TILE_ADDED (1 << 2)
 
 int fb_fd;
+u_int16_t *fbmem;
+struct fb_fix_screeninfo fix;
+struct fb_var_screeninfo var;
+
+enum COLORS {
+   GREEN,
+   BLUE ,
+   RED  ,
+   WHITE,
+   DARK ,
+};
+
 // If you extend this structure, either avoid pointers or adjust
 // the game logic allocate/deallocate and reset the memory
 typedef struct
 {
     bool occupied;
+    u_int16_t color;
 } tile;
 
 typedef struct
@@ -114,24 +130,19 @@ int open_framebuffer_by_name(const char *target_name) {
     return -1;
 }
 
-int main() {
-    int fb_fd = open_framebuffer_by_name(TARGET_FB_NAME);
-    if (fb_fd == -1) return 1;
 
-    printf("Opened framebuffer successfully: fd=%d\n", fb_fd);
-
-    // Now you can mmap() or ioctl() the framebuffer
-
-    close(fb_fd);
-    return 0;
-}
 // This function is called on the start of your application
 // Here you can initialize what ever you need for your task
 // return false if something fails, else true
 bool initializeSenseHat()
 {    
+    //get file descriptor
     fb_fd = open_framebuffer_by_name(TARGET_FB_NAME);
     if (fb_fd == -1) return false;
+    ioctl(fb_fd, FBIOGET_FSCREENINFO, &fix);
+    ioctl(fb_fd, FBIOGET_VSCREENINFO, &var);
+    fbmem = (u_int16_t *)mmap(NULL, fix.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fb_fd, 0);
+        if (fbmem == MAP_FAILED) return false;
     return true;
 }
 
@@ -142,6 +153,7 @@ void freeSenseHat()
   if (close(fb_fd) == -1) {
   perror("close");
   }
+  munmap(&fbmem, fix.smem_len);
 }
 
 // This function should return the key that corresponds to the joystick press
@@ -159,6 +171,17 @@ int readSenseHatJoystick()
 void renderSenseHatMatrix(bool const playfieldChanged)
 {
     (void)playfieldChanged;
+    if(playfieldChanged) {
+    for(int i = 0; i < game.grid.y; i++) {
+      for(int j= 0; j < game.grid.x; j++) {
+        if(game.playfield[i][j].occupied == true) {
+          fbmem[i*fix.line_length + j] = game.playfield[i][j].color;
+        } else {
+          fbmem[i*fix.line_length + j] = 0x0000;  
+        }
+      }
+    }
+  }
 }
 
 // The game logic uses only the following functions to interact with the playfield.
@@ -168,6 +191,7 @@ void renderSenseHatMatrix(bool const playfieldChanged)
 static inline void newTile(coord const target)
 {
     game.playfield[target.y][target.x].occupied = true;
+    game.playfield[target.y][target.x].color = 0xFFFF;
 }
 
 static inline void copyTile(coord const to, coord const from)
@@ -540,7 +564,7 @@ int main(int argc, char **argv)
             // reading the inputs from stdin. However, we expect you to read the inputs directly
             // from the input device and not from stdin (you should implement the readSenseHatJoystick
             // method).
-            //key = readKeyboard();
+            key = readKeyboard();
         }
         if (key == KEY_ENTER)
             break;
