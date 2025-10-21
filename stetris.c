@@ -224,6 +224,7 @@ int readSenseHatJoystick()
        if (pfd.revents & POLLIN) {
           // Data ready to read — safe to call read()
           read(pfd.fd, &event, sizeof(event));
+          return event.type;
       }
     }
 
