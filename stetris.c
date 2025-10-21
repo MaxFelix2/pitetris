@@ -220,31 +220,27 @@ int readSenseHatJoystick()
     pfd.fd = js_fd;
     pfd.events = POLLIN;
 
-    int ret = poll(&pfd, 1, 10);
-    if (ret > 0) {
-        if (pfd.revents & POLLIN) {
-            int last_type = 0;
-            while (1) {
-                ssize_t n = read(pfd.fd, &event, sizeof(event));
-                if (n == sizeof(event)) {
-                    last_type = event.type;
-                    if (event.type == EV_KEY && (event.value == 1 || event.value == 0)) {
-                    }
-                } else {
-                    if (n < 0 && errno == EAGAIN)
-                        break;
-                    else
-                        perror("read");
-                }
+    int ret = poll(&pfd, 1, 0);  // 0 ms timeout = non-blocking
+
+    if (ret > 0 && (pfd.revents & POLLIN)) {
+        while (1) {
+            ssize_t n = read(pfd.fd, &event, sizeof(event));
+            if (n == sizeof(event)) {
+                if (event.type == EV_KEY && (event.value == 1 || event.value == 0))
+                    return event.code;  // return actual joystick button
+            } else {
+                if (n < 0 && errno == EAGAIN)
+                    break;
+                else
+                    perror("read");
             }
-            return last_type;
         }
     } else if (ret < 0) {
         perror("poll");
     }
+
     return 0;
 }
-
 // This function should render the gamefield on the LED matrix. It is called
 // every game tick. The parameter playfieldChanged signals whether the game logic
 // has changed the playfield
