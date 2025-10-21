@@ -12,8 +12,8 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
-
-
+#include <sys/ioctl.h>
+#include <linux/fb.h>
 //to test different things
 //
  #define TARGET_FB_NAME "RPi-Sense FB" 
@@ -70,6 +70,18 @@ int main(int argc, char *argv[])
 { 
   int fd = open_framebuffer_by_name(TARGET_FB_NAME);
   printf("Found fb: %d", fd);
+  struct fb_fix_screeninfo fix;
+  struct fb_var_screeninfo var;
+  ioctl(fd, FBIOGET_FSCREENINFO, &fix);
+  ioctl(fd, FBIOGET_VSCREENINFO, &var);
+  printf("Resolution: %ux%u\n", var.xres, var.yres);
+  printf("Virtual resolution: %ux%u\n", var.xres_virtual, var.yres_virtual);
+  printf("Bits per pixel: %u\n", var.bits_per_pixel);
+  printf("Line length (bytes): %u\n", fix.line_length);
+  printf("Framebuffer mem size (smem_len): %u\n", fix.smem_len);
+  printf("Type: id=%d, type=%d, visual=%d\n", fix.id[0], fix.type, fix.visual);
+  //Light up screen
+
   close(fd);
   return EXIT_SUCCESS;
 }
